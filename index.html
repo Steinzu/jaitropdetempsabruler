@@ -322,6 +322,31 @@
 
         .hidden { display: none !important; }
         .help-link { color: var(--accent); text-decoration: none; font-size: 0.8em; margin-left: 10px; }
+
+        /* --- Tabs --- */
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid var(--glass-border); padding-bottom: 10px; }
+        .tab-btn { background: transparent; border: none; color: var(--text-dim); font-size: 1rem; padding: 8px 16px; cursor: pointer; width: auto; box-shadow: none; }
+        .tab-btn:hover { color: var(--text-main); background: rgba(255,255,255,0.05); transform: none; }
+        .tab-btn.active { color: var(--highlight); font-weight: bold; border-bottom: 2px solid var(--highlight); }
+
+        textarea {
+            width: 100%; height: 150px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border);
+            color: white; border-radius: 8px; padding: 10px; box-sizing: border-box; font-family: inherit; resize: vertical; margin-bottom: 10px;
+        }
+        textarea:focus { outline: none; border-color: var(--accent); background: rgba(0,0,0,0.5); }
+
+        /* --- Custom Text Card --- */
+        .game-card.text-only {
+            display: flex; align-items: center; justify-content: center;
+            background: linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+            padding: 20px; text-align: center;
+        }
+        .game-card.text-only .game-title {
+            position: static; transform: none; background: none; padding: 0;
+            font-size: 1.1rem; font-weight: 700; white-space: normal;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        }
+        .game-card.text-only img { display: none; }
     </style>
 </head>
 <body>
@@ -330,24 +355,39 @@
 
     <div class="panel" id="config-panel">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-            <h2 style="margin:0; font-size:1.2rem;">Library Access</h2>
+            <div class="tabs" style="margin-bottom: 0; border:none; padding:0;">
+                <button class="tab-btn active" onclick="switchTab('steam')" id="tab-steam">Steam Library</button>
+                <button class="tab-btn" onclick="switchTab('custom')" id="tab-custom">Custom List</button>
+            </div>
             <button class="btn-small btn-danger" onclick="forgetEverything()" style="width:auto;">Reset Data</button>
         </div>
         
-        <label style="font-weight:bold; display:block; margin-top:10px;">
-            Steam Web API Key (Yours only) <a href="https://steamcommunity.com/dev/apikey" target="_blank" class="help-link">Get Key ↗</a>
-        </label>
-        <input type="text" id="api-key" placeholder="Paste YOUR API Key here">
+        <!-- STEAM SECTION -->
+        <div id="steam-section">
+            <label style="font-weight:bold; display:block; margin-top:10px;">
+                Steam Web API Key (Yours only) <a href="https://steamcommunity.com/dev/apikey" target="_blank" class="help-link">Get Key ↗</a>
+            </label>
+            <input type="text" id="api-key" placeholder="Paste YOUR API Key here">
 
-        <label style="font-weight:bold; display:block; margin-top:20px; margin-bottom: 5px;">
-            Steam ID64s (Yours & Friends) <a href="https://steamid.io/" target="_blank" class="help-link">Find IDs ↗</a>
-        </label>
-        <p style="font-size:0.8rem; color:var(--text-dim); margin: 0 0 10px 0;">
-            Separate multiple IDs with commas to merge libraries.
-        </p>
-        <input type="text" id="steam-id" placeholder="e.g., 76561198000000000, 76561198123456789">
+            <label style="font-weight:bold; display:block; margin-top:20px; margin-bottom: 5px;">
+                Steam ID64s (Yours & Friends) <a href="https://steamid.io/" target="_blank" class="help-link">Find IDs ↗</a>
+            </label>
+            <p style="font-size:0.8rem; color:var(--text-dim); margin: 0 0 10px 0;">
+                Separate multiple IDs with commas to merge libraries.
+            </p>
+            <input type="text" id="steam-id" placeholder="e.g., 76561198000000000, 76561198123456789">
 
-        <button onclick="fetchGames()" id="fetch-btn" style="margin-top:10px;">🔓 Unlock Combined Libraries</button>
+            <button onclick="fetchGames()" id="fetch-btn" style="margin-top:10px;">🔓 Unlock Combined Libraries</button>
+        </div>
+
+        <!-- CUSTOM SECTION -->
+        <div id="custom-section" class="hidden">
+            <label style="font-weight:bold; display:block; margin-top:10px; margin-bottom:5px;">
+                Paste Game Names (One per line)
+            </label>
+            <textarea id="custom-list-input" placeholder="The Witcher 3&#10;Cyberpunk 2077&#10;Minecraft..."></textarea>
+            <button onclick="loadCustomList()" id="load-custom-btn">📝 Load Custom List</button>
+        </div>
     </div>
 
     <div id="main-interface" class="hidden" style="width: 100%; display: flex; flex-direction: column; align-items: center;">
@@ -403,6 +443,7 @@
         let showSelectedOnly = false;
         let showBanished = false;
         let currentWinnerId = null;
+        let currentMode = 'steam'; // 'steam' or 'custom'
 
         // --- INIT ---
         window.onload = function() {
@@ -411,9 +452,12 @@
             const savedHistory = localStorage.getItem('steins_roll_history');
             const savedSelections = localStorage.getItem('steins_selections');
             const savedBanished = localStorage.getItem('steins_banished');
+            const savedCustomList = localStorage.getItem('steins_custom_list');
+            const savedMode = localStorage.getItem('steins_mode');
 
             if (savedKey) document.getElementById('api-key').value = savedKey;
             if (savedId) document.getElementById('steam-id').value = savedId;
+            if (savedCustomList) document.getElementById('custom-list-input').value = savedCustomList;
             
             if (savedHistory) {
                 rollHistory = JSON.parse(savedHistory);
@@ -421,7 +465,26 @@
             }
             if (savedSelections) selectedGames = new Set(JSON.parse(savedSelections));
             if (savedBanished) banishedGames = new Set(JSON.parse(savedBanished));
+
+            // Restore mode
+            if (savedMode && savedMode === 'custom') {
+                switchTab('custom');
+            } else {
+                switchTab('steam');
+            }
         };
+
+        // --- TABS & MODES ---
+        function switchTab(tab) {
+            currentMode = tab;
+            localStorage.setItem('steins_mode', tab);
+
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(`tab-${tab}`).classList.add('active');
+
+            document.getElementById('steam-section').classList.toggle('hidden', tab !== 'steam');
+            document.getElementById('custom-section').classList.toggle('hidden', tab !== 'custom');
+        }
 
         // --- API & MERGE LOGIC ---
         async function fetchGames() {
@@ -431,22 +494,19 @@
 
             if (!apiKey || !steamIdsInput) return alert("Credentials required.");
 
-            // Store pure input
             localStorage.setItem('steins_steam_key', apiKey);
             localStorage.setItem('steins_steam_id', steamIdsInput);
 
-            // Parse IDs (comma separated)
             const steamIds = steamIdsInput.split(',').map(id => id.trim()).filter(id => id.length > 0);
 
             btn.disabled = true;
             btn.innerHTML = `Scanning ${steamIds.length} Libraries...`;
 
-            let combinedGames = new Map(); // Use Map to deduplicate by AppID
+            let combinedGames = new Map();
 
             try {
                 const proxy = "https://corsproxy.io/?";
                 
-                // Fetch all libraries in parallel
                 const promises = steamIds.map(id => {
                     const url = `http://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key=${apiKey}&steamid=${id}&include_appinfo=true&format=json`;
                     return fetch(proxy + encodeURIComponent(url))
@@ -459,27 +519,16 @@
                 results.forEach(result => {
                     if (result.data.response && result.data.response.games) {
                         result.data.response.games.forEach(game => {
-                            // If game not in map, add it.
                             if (!combinedGames.has(game.appid)) {
-                                // Add an extra property to track source owner (simplified)
-                                game.ownerId = result.id; 
+                                game.ownerId = result.id;
+                                game.isCustom = false;
                                 combinedGames.set(game.appid, game);
                             }
                         });
                     }
                 });
 
-                if (combinedGames.size > 0) {
-                    allGames = Array.from(combinedGames.values());
-                    allGames.sort((a, b) => a.name.localeCompare(b.name));
-                    renderGames();
-                    
-                    document.getElementById('config-panel').classList.add('hidden');
-                    document.getElementById('main-interface').classList.remove('hidden');
-                    updateCounts(); 
-                } else {
-                    alert("No games found. Check IDs and Privacy Settings.");
-                }
+                processGames(Array.from(combinedGames.values()));
 
             } catch (error) {
                 console.error(error);
@@ -488,6 +537,56 @@
                 btn.disabled = false;
                 btn.innerText = "Unlock Combined Libraries";
             }
+        }
+
+        function loadCustomList() {
+            const raw = document.getElementById('custom-list-input').value;
+            localStorage.setItem('steins_custom_list', raw);
+
+            const lines = raw.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+            if (lines.length === 0) return alert("List is empty!");
+
+            const games = lines.map(name => ({
+                appid: hashCode(name), // Generate distinct ID
+                name: name,
+                isCustom: true
+            }));
+
+            // Deduplicate by ID
+            const unique = [];
+            const seen = new Set();
+            games.forEach(g => {
+                if(!seen.has(g.appid)) {
+                    seen.add(g.appid);
+                    unique.push(g);
+                }
+            });
+
+            processGames(unique);
+        }
+
+        function processGames(gamesList) {
+            if (gamesList.length > 0) {
+                allGames = gamesList;
+                allGames.sort((a, b) => a.name.localeCompare(b.name));
+                renderGames();
+                
+                document.getElementById('config-panel').classList.add('hidden');
+                document.getElementById('main-interface').classList.remove('hidden');
+                updateCounts(); 
+            } else {
+                alert("No games found.");
+            }
+        }
+
+        function hashCode(str) {
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) {
+                const char = str.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash; 
+            }
+            return Math.abs(hash) + 1000000000; // Offset to avoid low number collision
         }
 
         // --- RENDER ---
@@ -502,6 +601,7 @@
                 let classes = 'game-card';
                 if (selectedGames.has(game.appid)) classes += ' selected';
                 if (banishedGames.has(game.appid)) classes += ' banished';
+                if (game.isCustom) classes += ' text-only';
                 card.className = classes;
 
                 card.onclick = (e) => {
@@ -509,20 +609,27 @@
                     toggleSelection(game.appid, card);
                 };
 
-                const headerImg = `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${game.appid}/header.jpg`;
-                
                 const isBanished = banishedGames.has(game.appid);
                 const banishIcon = isBanished ? '↺' : '✕';
                 const banishTitle = isBanished ? 'Restore Game' : 'Banish Game';
-                
                 const ownerDisplay = game.ownerId ? `ID:..${game.ownerId.slice(-4)}` : '';
-
-                card.innerHTML = `
+                
+                let inner = `
                     <div class="banish-btn" title="${banishTitle}" onclick="toggleBanish(${game.appid}, this)">${banishIcon}</div>
-                    ${ownerDisplay ? `<div class="owner-tag">${ownerDisplay}</div>` : ''}
-                    <img src="${headerImg}" loading="lazy" onerror="this.src='https://placehold.co/300x170/202020/white?text=No+Image'">
-                    <div class="game-title">${game.name}</div>
                 `;
+
+                if (game.isCustom) {
+                    inner += `<div class="game-title">${game.name}</div>`;
+                } else {
+                    const headerImg = `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${game.appid}/header.jpg`;
+                    inner += `
+                        ${ownerDisplay ? `<div class="owner-tag">${ownerDisplay}</div>` : ''}
+                        <img src="${headerImg}" loading="lazy" onerror="this.src='https://placehold.co/300x170/202020/white?text=No+Image'">
+                        <div class="game-title">${game.name}</div>
+                    `;
+                }
+
+                card.innerHTML = inner;
                 container.appendChild(card);
             });
             applyFilters();
@@ -545,16 +652,18 @@
 
         function toggleBanish(appId, btn) {
             const card = document.getElementById(`card-${appId}`);
+            if (!card) return; // Defensive check if card doesn't exist for some reason
+
             if (banishedGames.has(appId)) {
                 banishedGames.delete(appId);
                 card.classList.remove('banished');
-                btn.innerText = '✕';
+                if (btn) btn.innerText = '✕'; // Only update if btn is provided
             } else {
                 banishedGames.add(appId);
                 selectedGames.delete(appId); 
                 card.classList.remove('selected');
                 card.classList.add('banished');
-                btn.innerText = '↺';
+                if (btn) btn.innerText = '↺'; // Only update if btn is provided
             }
             saveData();
             updateCounts();
@@ -603,10 +712,14 @@
         function selectAllVisible() {
             const cards = document.querySelectorAll('.game-card:not(.hidden)');
             cards.forEach(card => {
-                const appId = parseInt(card.id.split('-')[1]);
-                if(!banishedGames.has(appId)) {
-                    selectedGames.add(appId);
-                    card.classList.add('selected');
+                // Use numeric ID from "card-XXXX"
+                const parts = card.id.split('-');
+                if (parts.length > 1) {
+                    const appId = parseInt(parts[1]);
+                    if(!isNaN(appId) && !banishedGames.has(appId)) {
+                        selectedGames.add(appId);
+                        card.classList.add('selected');
+                    }
                 }
             });
             saveData();
@@ -633,7 +746,13 @@
         function spinWheel() {
             if (selectedGames.size === 0) return alert("Select games first!");
 
-            const pool = Array.from(selectedGames).map(id => allGames.find(g => g.appid === id));
+            // Filter out undefined entries (in case selection contains IDs from a different mode)
+            const pool = Array.from(selectedGames)
+                .map(id => allGames.find(g => g.appid === id))
+                .filter(g => g);
+
+            if (pool.length === 0) return alert("No valid games selected for this mode!");
+
             const rollBtn = document.getElementById('roll-btn');
             const removeBox = document.getElementById('remove-winner-box');
             const stageImg = document.getElementById('stage-img');
@@ -649,7 +768,14 @@
             
             const spin = () => {
                 const randomGame = pool[Math.floor(Math.random() * pool.length)];
-                const imgUrl = `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${randomGame.appid}/header.jpg`;
+                
+                let imgUrl;
+                if (randomGame.isCustom) {
+                    // Use placeholder for custom games to keep layout consistent
+                    imgUrl = `https://placehold.co/600x350/202020/FFF?text=${encodeURIComponent(randomGame.name)}`;
+                } else {
+                    imgUrl = `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${randomGame.appid}/header.jpg`;
+                }
                 
                 stageName.innerText = randomGame.name;
                 stageName.style.color = "#ccc";
@@ -679,13 +805,13 @@
 
         function removeWinner() {
             if (!currentWinnerId) return;
-            selectedGames.delete(currentWinnerId);
-            document.getElementById(`card-${currentWinnerId}`).classList.remove('selected');
-            saveData();
-            updateCounts();
+            
+            // Banishes the current winner. toggleBanish handles updating state, storage, and UI.
+            toggleBanish(currentWinnerId, null); 
+
+            currentWinnerId = null; // Clear the winner ID as it's been handled
             document.getElementById('remove-winner-box').style.display = 'none';
             document.getElementById('stage-name').innerHTML += " <small>(Removed)</small>";
-            if(showSelectedOnly) applyFilters();
         }
 
         // --- HISTORY ---
