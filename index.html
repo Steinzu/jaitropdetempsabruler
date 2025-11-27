@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>J'ai trop de temps à brûler</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-deep: #0f1014;
+            --glass: rgba(30, 35, 45, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --text-main: #e0e6ed;
+            --text-dim: #94a3b8;
+            --accent: #3b82f6; /* Blue */
+            --accent-glow: rgba(59, 130, 246, 0.5);
+            --highlight: #10b981; /* Green */
+            --danger: #ef4444; /* Red */
+            --banished: #64748b; /* Grey */
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-deep);
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.15) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.1) 0px, transparent 50%);
+            background-attachment: fixed;
+            color: var(--text-main);
+            margin: 0;
+            padding: 40px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        /* --- Animations --- */
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes pulseGlow { 0% { box-shadow: 0 0 5px var(--accent-glow); } 50% { box-shadow: 0 0 20px var(--accent-glow); } 100% { box-shadow: 0 0 5px var(--accent-glow); } }
+
+        h1 {
+            font-weight: 800;
+            font-size: 2.5rem;
+            margin-bottom: 30px;
+            background: linear-gradient(to right, #fff, #94a3b8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 30px rgba(255,255,255,0.1);
+            letter-spacing: -1px;
+            text-align: center;
+        }
+
+        /* --- Glass Panels --- */
+        .panel {
+            background: var(--glass);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            width: 100%;
+            max-width: 700px;
+            margin-bottom: 30px;
+            animation: fadeIn 0.6s ease-out;
+        }
+
+        /* --- Inputs & Buttons --- */
+        input[type="text"] {
+            width: 100%;
+            padding: 12px 15px;
+            margin: 8px 0 20px 0;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--glass-border);
+            color: white;
+            border-radius: 8px;
+            box-sizing: border-box;
+            font-family: inherit;
+            transition: 0.2s;
+        }
+        input[type="text"]:focus { outline: none; border-color: var(--accent); background: rgba(0,0,0,0.5); }
+
+        button {
+            background: var(--accent);
+            border: none;
+            color: white;
+            padding: 12px 24px;
+            cursor: pointer;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 1rem;
+            width: 100%;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+        }
+        button:hover { transform: translateY(-2px); box-shadow: 0 6px 12px rgba(0,0,0,0.3); filter: brightness(1.1); }
+        button:active { transform: translateY(0); }
+        button:disabled { background: var(--text-dim); cursor: not-allowed; transform: none; }
+
+        .btn-secondary { background: rgba(255,255,255,0.1); border: 1px solid var(--glass-border); }
+        .btn-secondary:hover { background: rgba(255,255,255,0.2); }
+        
+        .btn-danger { background: rgba(239, 68, 68, 0.2); color: var(--danger); border: 1px solid rgba(239, 68, 68, 0.3); }
+        .btn-danger:hover { background: var(--danger); color: white; }
+
+        .btn-small { width: auto; padding: 8px 16px; font-size: 0.9rem; }
+
+        /* --- The Stage (Roulette) --- */
+        .stage-container {
+            width: 100%;
+            max-width: 700px;
+            background: #000;
+            border-radius: 16px;
+            overflow: hidden;
+            position: relative;
+            box-shadow: 0 0 50px rgba(0,0,0,0.5);
+            margin-bottom: 30px;
+            border: 1px solid var(--glass-border);
+        }
+
+        .stage-display {
+            height: 350px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        
+        .stage-bg-blur {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-size: cover;
+            background-position: center;
+            filter: blur(20px) brightness(0.4);
+            z-index: 1;
+            transition: background-image 0.2s;
+        }
+
+        #stage-img {
+            max-width: 90%;
+            max-height: 90%;
+            border-radius: 8px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+            z-index: 2;
+            transition: transform 0.2s;
+        }
+
+        .stage-footer {
+            background: rgba(10,10,10,0.9);
+            padding: 20px;
+            text-align: center;
+            border-top: 1px solid #333;
+            z-index: 2;
+            position: relative;
+        }
+
+        #stage-name {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: var(--text-main);
+            margin-bottom: 10px;
+        }
+
+        .roll-btn {
+            background: linear-gradient(135deg, var(--highlight), #059669);
+            font-size: 1.2rem;
+            padding: 15px;
+            margin-top: 10px;
+            animation: pulseGlow 3s infinite;
+        }
+
+        /* --- Controls & Grid --- */
+        .controls {
+            display: flex;
+            gap: 10px;
+            width: 100%;
+            max-width: 1100px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+        
+        #search-box { flex-grow: 1; min-width: 250px; margin: 0; background: var(--glass); }
+
+        .game-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 20px;
+            width: 100%;
+            max-width: 1100px;
+            padding-bottom: 50px;
+        }
+
+        /* --- Game Card --- */
+        .game-card {
+            background: var(--glass);
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+            aspect-ratio: 16/9;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            border: 2px solid transparent;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .game-card img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.5s;
+        }
+
+        /* Selection State */
+        .game-card.selected {
+            border-color: var(--highlight);
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.4);
+        }
+        .game-card.selected::after {
+            content: 'SELECTED';
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(16, 185, 129, 0.9);
+            color: #fff;
+            padding: 5px 10px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            border-radius: 4px;
+            pointer-events: none;
+            opacity: 0;
+            transition: 0.3s;
+        }
+        .game-card.selected:hover::after { opacity: 1; }
+
+        /* Banish State (Greyed out) */
+        .game-card.banished {
+            filter: grayscale(1) opacity(0.6);
+            border: 1px dashed var(--text-dim);
+        }
+
+        /* Hover Effects */
+        .game-card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.3); }
+        .game-card:hover img { transform: scale(1.1); }
+
+        /* Card Title */
+        .game-title {
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
+            padding: 20px 10px 10px 10px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            transform: translateY(100%);
+            transition: transform 0.3s;
+        }
+        .game-card:hover .game-title { transform: translateY(0); }
+        .game-card.selected .game-title { transform: translateY(0); }
+
+        /* Banish Button (The Ghost) */
+        .banish-btn {
+            position: absolute;
+            top: 5px; right: 5px;
+            width: 28px; height: 28px;
+            background: rgba(0,0,0,0.6);
+            color: var(--text-dim);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            z-index: 10;
+            opacity: 0;
+            transition: 0.2s;
+            border: 1px solid transparent;
+        }
+        .banish-btn:hover { background: var(--danger); color: white; transform: scale(1.1); }
+        .game-card:hover .banish-btn { opacity: 1; }
+        
+        /* When in banished state, icon changes to restore */
+        .game-card.banished .banish-btn {
+            opacity: 1;
+            background: var(--highlight);
+            color: white;
+            content: '↺';
+        }
+
+        /* History */
+        .history-list {
+            list-style: none; padding: 0; margin: 0;
+            max-height: 120px; overflow-y: auto;
+        }
+        .history-item {
+            padding: 8px;
+            border-bottom: 1px solid var(--glass-border);
+            display: flex; justify-content: space-between;
+            font-size: 0.9rem;
+            color: var(--text-dim);
+        }
+        .history-item:first-child { color: var(--highlight); font-weight: bold; }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-deep); }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+        .hidden { display: none !important; }
+        .help-link { color: var(--accent); text-decoration: none; font-size: 0.8em; margin-left: 10px; }
+    </style>
+</head>
+<body>
+
+    <h1>J'ai trop de temps à brûler</h1>
+
+    <div class="panel" id="config-panel">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+            <h2 style="margin:0; font-size:1.2rem;">Library Access</h2>
+            <button class="btn-small btn-danger" onclick="forgetEverything()" style="width:auto;">Reset Data</button>
+        </div>
+        
+        <label style="font-weight:bold; display:block; margin-top:10px;">
+            Steam Web API Key <a href="https://steamcommunity.com/dev/apikey" target="_blank" class="help-link">Get Key ↗</a>
+        </label>
+        <input type="text" id="api-key" placeholder="Paste your API Key here">
+
+        <label style="font-weight:bold; display:block; margin-top:10px;">
+            Steam ID64 <a href="https://steamid.io/" target="_blank" class="help-link">Find ID ↗</a>
+        </label>
+        <input type="text" id="steam-id" placeholder="e.g., 76561198000000000">
+
+        <button onclick="fetchGames()" id="fetch-btn" style="margin-top:10px;">🔓 Unlock Library</button>
+    </div>
+
+    <div id="main-interface" class="hidden" style="width: 100%; display: flex; flex-direction: column; align-items: center;">
+        
+        <div class="stage-container">
+            <div class="stage-display">
+                <div class="stage-bg-blur" id="stage-bg"></div>
+                <img id="stage-img" src="https://store.steampowered.com/public/images/v6/logo_steam_footer.png" alt="Game Art">
+            </div>
+            <div class="stage-footer">
+                <div id="stage-name">Ready to Roll</div>
+                <button id="roll-btn" class="roll-btn" onclick="spinWheel()">🎲 SPIN THE WHEEL</button>
+                <div id="remove-winner-box" style="display:none; margin-top:10px;">
+                    <button class="btn-small btn-danger" onclick="removeWinner()">Remove Winner from Pool</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel" style="padding: 15px;">
+            <div style="display:flex; justify-content:space-between; margin-bottom:10px; font-size:0.9rem; font-weight:bold; color:var(--text-dim);">
+                <span>TIMELINE</span>
+                <span style="cursor: pointer; color: var(--danger);" onclick="clearHistory()">Clear</span>
+            </div>
+            <ul id="history-list" class="history-list"></ul>
+        </div>
+
+        <div class="controls">
+            <input type="text" id="search-box" placeholder="🔍 Filter games..." onkeyup="applyFilters()">
+            
+            <button id="filter-selected-btn" class="btn-secondary btn-small" onclick="toggleSelectedView()">
+                Show Selected Only (<span id="btn-count">0</span>)
+            </button>
+            
+            <button id="filter-banished-btn" class="btn-secondary btn-small" onclick="toggleBanishedView()">
+                Show Banished 👻
+            </button>
+
+            <button class="btn-secondary btn-small" onclick="selectAllVisible()">Select All Visible</button>
+            <button class="btn-danger btn-small" onclick="clearSelection()">Clear Selection</button>
+        </div>
+
+        <div class="game-grid" id="game-container"></div>
+    </div>
+
+    <script>
+        // --- DATA ---
+        let allGames = [];
+        let selectedGames = new Set();
+        let banishedGames = new Set();
+        let rollHistory = [];
+        
+        // --- STATE ---
+        let showSelectedOnly = false;
+        let showBanished = false;
+        let currentWinnerId = null;
+
+        // --- INIT ---
+        window.onload = function() {
+            const savedKey = localStorage.getItem('steins_steam_key');
+            const savedId = localStorage.getItem('steins_steam_id');
+            const savedHistory = localStorage.getItem('steins_roll_history');
+            const savedSelections = localStorage.getItem('steins_selections');
+            const savedBanished = localStorage.getItem('steins_banished');
+
+            if (savedKey) document.getElementById('api-key').value = savedKey;
+            if (savedId) document.getElementById('steam-id').value = savedId;
+            
+            if (savedHistory) {
+                rollHistory = JSON.parse(savedHistory);
+                renderHistory();
+            }
+            if (savedSelections) selectedGames = new Set(JSON.parse(savedSelections));
+            if (savedBanished) banishedGames = new Set(JSON.parse(savedBanished));
+        };
+
+        // --- API ---
+        async function fetchGames() {
+            const apiKey = document.getElementById('api-key').value.trim();
+            const steamId = document.getElementById('steam-id').value.trim();
+            const btn = document.getElementById('fetch-btn');
+
+            if (!apiKey || !steamId) return alert("Credentials required.");
+
+            localStorage.setItem('steins_steam_key', apiKey);
+            localStorage.setItem('steins_steam_id', steamId);
+
+            btn.disabled = true;
+            btn.innerHTML = "Summoning Games...";
+
+            const proxy = "https://corsproxy.io/?";
+            const url = `http://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key=${apiKey}&steamid=${steamId}&include_appinfo=true&format=json`;
+
+            try {
+                const response = await fetch(proxy + encodeURIComponent(url));
+                const data = await response.json();
+
+                if (data.response && data.response.games) {
+                    allGames = data.response.games.sort((a, b) => a.name.localeCompare(b.name));
+                    renderGames();
+                    
+                    document.getElementById('config-panel').classList.add('hidden');
+                    document.getElementById('main-interface').classList.remove('hidden');
+                    updateCounts(); 
+                } else {
+                    alert("No games found. Check ID and Privacy Settings.");
+                }
+            } catch (error) {
+                console.error(error);
+                alert("Connection failed.");
+            } finally {
+                btn.disabled = false;
+                btn.innerText = "Unlock Library";
+            }
+        }
+
+        // --- RENDER ---
+        function renderGames() {
+            const container = document.getElementById('game-container');
+            container.innerHTML = '';
+
+            allGames.forEach(game => {
+                const card = document.createElement('div');
+                card.id = `card-${game.appid}`;
+                
+                // Determine classes
+                let classes = 'game-card';
+                if (selectedGames.has(game.appid)) classes += ' selected';
+                if (banishedGames.has(game.appid)) classes += ' banished';
+                
+                card.className = classes;
+
+                // Event: Click body to Select
+                card.onclick = (e) => {
+                    // Ignore if clicking the banish button
+                    if(e.target.classList.contains('banish-btn')) return;
+                    toggleSelection(game.appid, card);
+                };
+
+                const headerImg = `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${game.appid}/header.jpg`;
+
+                // Banish Button Icon
+                const isBanished = banishedGames.has(game.appid);
+                const banishIcon = isBanished ? '↺' : '✕';
+                const banishTitle = isBanished ? 'Restore Game' : 'Banish Game';
+
+                card.innerHTML = `
+                    <div class="banish-btn" title="${banishTitle}" onclick="toggleBanish(${game.appid}, this)">${banishIcon}</div>
+                    <img src="${headerImg}" loading="lazy" onerror="this.src='https://placehold.co/300x170/202020/white?text=No+Image'">
+                    <div class="game-title">${game.name}</div>
+                `;
+                container.appendChild(card);
+            });
+            applyFilters();
+        }
+
+        // --- LOGIC ---
+        function toggleSelection(appId, card) {
+            if (banishedGames.has(appId)) return; // Cannot select banished games
+            
+            if (selectedGames.has(appId)) {
+                selectedGames.delete(appId);
+                card.classList.remove('selected');
+            } else {
+                selectedGames.add(appId);
+                card.classList.add('selected');
+            }
+            saveData();
+            updateCounts();
+        }
+
+        function toggleBanish(appId, btn) {
+            const card = document.getElementById(`card-${appId}`);
+            
+            if (banishedGames.has(appId)) {
+                // Restore
+                banishedGames.delete(appId);
+                card.classList.remove('banished');
+                btn.innerText = '✕';
+            } else {
+                // Banish
+                banishedGames.add(appId);
+                selectedGames.delete(appId); // Remove from selection if banished
+                card.classList.remove('selected');
+                card.classList.add('banished');
+                btn.innerText = '↺';
+            }
+            saveData();
+            updateCounts();
+            // Re-apply filters to immediately hide/show based on current view
+            applyFilters();
+        }
+
+        function toggleSelectedView() {
+            showSelectedOnly = !showSelectedOnly;
+            // If we turn on Selected View, we turn OFF banished view
+            if(showSelectedOnly && showBanished) toggleBanishedView(); 
+            
+            const btn = document.getElementById('filter-selected-btn');
+            btn.style.background = showSelectedOnly ? 'var(--highlight)' : '';
+            applyFilters();
+        }
+
+        function toggleBanishedView() {
+            showBanished = !showBanished;
+            // If we turn on Banished View, we turn OFF selected view to avoid confusion
+            if(showBanished && showSelectedOnly) toggleSelectedView();
+
+            const btn = document.getElementById('filter-banished-btn');
+            btn.style.background = showBanished ? 'var(--banished)' : '';
+            applyFilters();
+        }
+
+        function applyFilters() {
+            const query = document.getElementById('search-box').value.toLowerCase();
+            const cards = document.getElementsByClassName('game-card');
+            
+            Array.from(cards).forEach((card, index) => {
+                const game = allGames[index];
+                const isBanished = banishedGames.has(game.appid);
+                const matchesSearch = game.name.toLowerCase().includes(query);
+                
+                let isVisible = matchesSearch;
+
+                if (showBanished) {
+                    // GRAVEYARD MODE: Show ONLY banished
+                    if (!isBanished) isVisible = false;
+                } else {
+                    // NORMAL MODE: Hide banished
+                    if (isBanished) isVisible = false;
+                    
+                    // Apply selection filter only in normal mode
+                    if (showSelectedOnly && !selectedGames.has(game.appid)) isVisible = false;
+                }
+
+                if (isVisible) card.classList.remove('hidden');
+                else card.classList.add('hidden');
+            });
+        }
+
+        function selectAllVisible() {
+            // Only select items that are visible and NOT banished
+            const cards = document.querySelectorAll('.game-card:not(.hidden)');
+            cards.forEach(card => {
+                const appId = parseInt(card.id.split('-')[1]);
+                if(!banishedGames.has(appId)) {
+                    selectedGames.add(appId);
+                    card.classList.add('selected');
+                }
+            });
+            saveData();
+            updateCounts();
+        }
+
+        function clearSelection() {
+            selectedGames.clear();
+            document.querySelectorAll('.game-card').forEach(c => c.classList.remove('selected'));
+            saveData();
+            updateCounts();
+        }
+
+        function updateCounts() {
+            document.getElementById('btn-count').innerText = selectedGames.size;
+        }
+
+        function saveData() {
+            localStorage.setItem('steins_selections', JSON.stringify(Array.from(selectedGames)));
+            localStorage.setItem('steins_banished', JSON.stringify(Array.from(banishedGames)));
+        }
+
+        // --- ROULETTE ---
+        function spinWheel() {
+            if (selectedGames.size === 0) return alert("Select games first!");
+
+            const pool = Array.from(selectedGames).map(id => allGames.find(g => g.appid === id));
+            const rollBtn = document.getElementById('roll-btn');
+            const removeBox = document.getElementById('remove-winner-box');
+            const stageImg = document.getElementById('stage-img');
+            const stageBg = document.getElementById('stage-bg');
+            const stageName = document.getElementById('stage-name');
+            
+            rollBtn.disabled = true;
+            removeBox.style.display = 'none';
+            
+            let duration = 4000; 
+            let intervalTime = 50; 
+            let timeElapsed = 0;
+            
+            const spin = () => {
+                const randomGame = pool[Math.floor(Math.random() * pool.length)];
+                const imgUrl = `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${randomGame.appid}/header.jpg`;
+                
+                stageName.innerText = randomGame.name;
+                stageName.style.color = "#ccc";
+                stageImg.src = imgUrl;
+                stageBg.style.backgroundImage = `url('${imgUrl}')`;
+                
+                timeElapsed += intervalTime;
+                if (timeElapsed > 2000) intervalTime *= 1.1; 
+
+                if (timeElapsed < duration) {
+                    setTimeout(spin, intervalTime);
+                } else {
+                    currentWinnerId = randomGame.appid;
+                    stageName.innerHTML = `<span style="color:var(--highlight)">👑 ${randomGame.name}</span>`;
+                    stageImg.style.transform = "scale(1.05)";
+                    stageImg.style.borderColor = "var(--highlight)";
+                    
+                    addToHistory(randomGame.name);
+                    rollBtn.disabled = false;
+                    removeBox.style.display = 'block';
+                    
+                    setTimeout(() => { stageImg.style.transform = "scale(1)"; }, 300);
+                }
+            };
+            spin();
+        }
+
+        function removeWinner() {
+            if (!currentWinnerId) return;
+            // Remove from selection but NOT banish (just remove from pool)
+            selectedGames.delete(currentWinnerId);
+            document.getElementById(`card-${currentWinnerId}`).classList.remove('selected');
+            saveData();
+            updateCounts();
+            document.getElementById('remove-winner-box').style.display = 'none';
+            document.getElementById('stage-name').innerHTML += " <small>(Removed)</small>";
+            if(showSelectedOnly) applyFilters();
+        }
+
+        // --- HISTORY ---
+        function addToHistory(name) {
+            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            rollHistory.unshift({ name, time });
+            if (rollHistory.length > 10) rollHistory.pop();
+            localStorage.setItem('steins_roll_history', JSON.stringify(rollHistory));
+            renderHistory();
+        }
+
+        function renderHistory() {
+            const list = document.getElementById('history-list');
+            list.innerHTML = '';
+            rollHistory.forEach(item => {
+                const li = document.createElement('li');
+                li.className = 'history-item';
+                li.innerHTML = `<span>${item.name}</span> <span>${item.time}</span>`;
+                list.appendChild(li);
+            });
+        }
+        
+        function clearHistory() {
+            rollHistory = [];
+            localStorage.removeItem('steins_roll_history');
+            renderHistory();
+        }
+
+        function forgetEverything() {
+            if(confirm("Factory Reset: Delete all keys, history, and selections?")) {
+                localStorage.clear();
+                location.reload();
+            }
+        }
+    </script>
+</body>
+</html>
