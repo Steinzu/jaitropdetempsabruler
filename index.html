@@ -280,12 +280,24 @@
         .banish-btn:hover { background: var(--danger); color: white; transform: scale(1.1); }
         .game-card:hover .banish-btn { opacity: 1; }
         
-        /* When in banished state, icon changes to restore */
         .game-card.banished .banish-btn {
             opacity: 1;
             background: var(--highlight);
             color: white;
             content: '↺';
+        }
+        
+        /* Owner Tag */
+        .owner-tag {
+            position: absolute;
+            top: 5px; left: 5px;
+            background: rgba(59, 130, 246, 0.8);
+            color: white;
+            font-size: 0.65rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            pointer-events: none;
+            opacity: 0.7;
         }
 
         /* History */
@@ -323,16 +335,19 @@
         </div>
         
         <label style="font-weight:bold; display:block; margin-top:10px;">
-            Steam Web API Key <a href="https://steamcommunity.com/dev/apikey" target="_blank" class="help-link">Get Key ↗</a>
+            Steam Web API Key (Yours only) <a href="https://steamcommunity.com/dev/apikey" target="_blank" class="help-link">Get Key ↗</a>
         </label>
-        <input type="text" id="api-key" placeholder="Paste your API Key here">
+        <input type="text" id="api-key" placeholder="Paste YOUR API Key here">
 
-        <label style="font-weight:bold; display:block; margin-top:10px;">
-            Steam ID64 <a href="https://steamid.io/" target="_blank" class="help-link">Find ID ↗</a>
+        <label style="font-weight:bold; display:block; margin-top:20px; margin-bottom: 5px;">
+            Steam ID64s (Yours & Friends) <a href="https://steamid.io/" target="_blank" class="help-link">Find IDs ↗</a>
         </label>
-        <input type="text" id="steam-id" placeholder="e.g., 76561198000000000">
+        <p style="font-size:0.8rem; color:var(--text-dim); margin: 0 0 10px 0;">
+            Separate multiple IDs with commas to merge libraries.
+        </p>
+        <input type="text" id="steam-id" placeholder="e.g., 76561198000000000, 76561198123456789">
 
-        <button onclick="fetchGames()" id="fetch-btn" style="margin-top:10px;">🔓 Unlock Library</button>
+        <button onclick="fetchGames()" id="fetch-btn" style="margin-top:10px;">🔓 Unlock Combined Libraries</button>
     </div>
 
     <div id="main-interface" class="hidden" style="width: 100%; display: flex; flex-direction: column; align-items: center;">
@@ -408,43 +423,70 @@
             if (savedBanished) banishedGames = new Set(JSON.parse(savedBanished));
         };
 
-        // --- API ---
+        // --- API & MERGE LOGIC ---
         async function fetchGames() {
             const apiKey = document.getElementById('api-key').value.trim();
-            const steamId = document.getElementById('steam-id').value.trim();
+            const steamIdsInput = document.getElementById('steam-id').value.trim();
             const btn = document.getElementById('fetch-btn');
 
-            if (!apiKey || !steamId) return alert("Credentials required.");
+            if (!apiKey || !steamIdsInput) return alert("Credentials required.");
 
+            // Store pure input
             localStorage.setItem('steins_steam_key', apiKey);
-            localStorage.setItem('steins_steam_id', steamId);
+            localStorage.setItem('steins_steam_id', steamIdsInput);
+
+            // Parse IDs (comma separated)
+            const steamIds = steamIdsInput.split(',').map(id => id.trim()).filter(id => id.length > 0);
 
             btn.disabled = true;
-            btn.innerHTML = "Summoning Games...";
+            btn.innerHTML = `Scanning ${steamIds.length} Libraries...`;
 
-            const proxy = "https://corsproxy.io/?";
-            const url = `http://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key=${apiKey}&steamid=${steamId}&include_appinfo=true&format=json`;
+            let combinedGames = new Map(); // Use Map to deduplicate by AppID
 
             try {
-                const response = await fetch(proxy + encodeURIComponent(url));
-                const data = await response.json();
+                const proxy = "https://corsproxy.io/?";
+                
+                // Fetch all libraries in parallel
+                const promises = steamIds.map(id => {
+                    const url = `http://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key=${apiKey}&steamid=${id}&include_appinfo=true&format=json`;
+                    return fetch(proxy + encodeURIComponent(url))
+                        .then(res => res.json())
+                        .then(data => ({ id: id, data: data }));
+                });
 
-                if (data.response && data.response.games) {
-                    allGames = data.response.games.sort((a, b) => a.name.localeCompare(b.name));
+                const results = await Promise.all(promises);
+
+                results.forEach(result => {
+                    if (result.data.response && result.data.response.games) {
+                        result.data.response.games.forEach(game => {
+                            // If game not in map, add it.
+                            if (!combinedGames.has(game.appid)) {
+                                // Add an extra property to track source owner (simplified)
+                                game.ownerId = result.id; 
+                                combinedGames.set(game.appid, game);
+                            }
+                        });
+                    }
+                });
+
+                if (combinedGames.size > 0) {
+                    allGames = Array.from(combinedGames.values());
+                    allGames.sort((a, b) => a.name.localeCompare(b.name));
                     renderGames();
                     
                     document.getElementById('config-panel').classList.add('hidden');
                     document.getElementById('main-interface').classList.remove('hidden');
                     updateCounts(); 
                 } else {
-                    alert("No games found. Check ID and Privacy Settings.");
+                    alert("No games found. Check IDs and Privacy Settings.");
                 }
+
             } catch (error) {
                 console.error(error);
-                alert("Connection failed.");
+                alert("Connection failed. Ensure API Key is correct.");
             } finally {
                 btn.disabled = false;
-                btn.innerText = "Unlock Library";
+                btn.innerText = "Unlock Combined Libraries";
             }
         }
 
@@ -457,29 +499,27 @@
                 const card = document.createElement('div');
                 card.id = `card-${game.appid}`;
                 
-                // Determine classes
                 let classes = 'game-card';
                 if (selectedGames.has(game.appid)) classes += ' selected';
                 if (banishedGames.has(game.appid)) classes += ' banished';
-                
                 card.className = classes;
 
-                // Event: Click body to Select
                 card.onclick = (e) => {
-                    // Ignore if clicking the banish button
                     if(e.target.classList.contains('banish-btn')) return;
                     toggleSelection(game.appid, card);
                 };
 
                 const headerImg = `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${game.appid}/header.jpg`;
-
-                // Banish Button Icon
+                
                 const isBanished = banishedGames.has(game.appid);
                 const banishIcon = isBanished ? '↺' : '✕';
                 const banishTitle = isBanished ? 'Restore Game' : 'Banish Game';
+                
+                const ownerDisplay = game.ownerId ? `ID:..${game.ownerId.slice(-4)}` : '';
 
                 card.innerHTML = `
                     <div class="banish-btn" title="${banishTitle}" onclick="toggleBanish(${game.appid}, this)">${banishIcon}</div>
+                    ${ownerDisplay ? `<div class="owner-tag">${ownerDisplay}</div>` : ''}
                     <img src="${headerImg}" loading="lazy" onerror="this.src='https://placehold.co/300x170/202020/white?text=No+Image'">
                     <div class="game-title">${game.name}</div>
                 `;
@@ -490,7 +530,7 @@
 
         // --- LOGIC ---
         function toggleSelection(appId, card) {
-            if (banishedGames.has(appId)) return; // Cannot select banished games
+            if (banishedGames.has(appId)) return;
             
             if (selectedGames.has(appId)) {
                 selectedGames.delete(appId);
@@ -505,31 +545,25 @@
 
         function toggleBanish(appId, btn) {
             const card = document.getElementById(`card-${appId}`);
-            
             if (banishedGames.has(appId)) {
-                // Restore
                 banishedGames.delete(appId);
                 card.classList.remove('banished');
                 btn.innerText = '✕';
             } else {
-                // Banish
                 banishedGames.add(appId);
-                selectedGames.delete(appId); // Remove from selection if banished
+                selectedGames.delete(appId); 
                 card.classList.remove('selected');
                 card.classList.add('banished');
                 btn.innerText = '↺';
             }
             saveData();
             updateCounts();
-            // Re-apply filters to immediately hide/show based on current view
             applyFilters();
         }
 
         function toggleSelectedView() {
             showSelectedOnly = !showSelectedOnly;
-            // If we turn on Selected View, we turn OFF banished view
             if(showSelectedOnly && showBanished) toggleBanishedView(); 
-            
             const btn = document.getElementById('filter-selected-btn');
             btn.style.background = showSelectedOnly ? 'var(--highlight)' : '';
             applyFilters();
@@ -537,9 +571,7 @@
 
         function toggleBanishedView() {
             showBanished = !showBanished;
-            // If we turn on Banished View, we turn OFF selected view to avoid confusion
             if(showBanished && showSelectedOnly) toggleSelectedView();
-
             const btn = document.getElementById('filter-banished-btn');
             btn.style.background = showBanished ? 'var(--banished)' : '';
             applyFilters();
@@ -557,13 +589,9 @@
                 let isVisible = matchesSearch;
 
                 if (showBanished) {
-                    // GRAVEYARD MODE: Show ONLY banished
                     if (!isBanished) isVisible = false;
                 } else {
-                    // NORMAL MODE: Hide banished
                     if (isBanished) isVisible = false;
-                    
-                    // Apply selection filter only in normal mode
                     if (showSelectedOnly && !selectedGames.has(game.appid)) isVisible = false;
                 }
 
@@ -573,7 +601,6 @@
         }
 
         function selectAllVisible() {
-            // Only select items that are visible and NOT banished
             const cards = document.querySelectorAll('.game-card:not(.hidden)');
             cards.forEach(card => {
                 const appId = parseInt(card.id.split('-')[1]);
@@ -652,7 +679,6 @@
 
         function removeWinner() {
             if (!currentWinnerId) return;
-            // Remove from selection but NOT banish (just remove from pool)
             selectedGames.delete(currentWinnerId);
             document.getElementById(`card-${currentWinnerId}`).classList.remove('selected');
             saveData();
